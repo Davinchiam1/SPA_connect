@@ -1,0 +1,242 @@
+import datetime
+import gzip
+import json
+import pickle
+import urllib.parse
+import pandas as pd
+import io
+import requests
+from pandas import json_normalize
+
+from credentials import credentials, proxy
+
+
+def unfold_json(df, col_name, ad_pref=True):
+    # df[col_name] = df[col_name].str.replace("'", "\"")
+    df = df.fillna(0)
+
+    df[col_name] = df[col_name].apply(lambda x: x[0] if type(x) == list else x)
+    df_temp = json_normalize(df[col_name])
+    if ad_pref:
+        df_temp = df_temp.add_prefix(col_name + '.')
+    df = pd.concat([df, df_temp], axis=1)
+    return df
+
+
+class Report_loader:
+    """Base class for api requests to SPA"""
+
+    def __init__(self, endpoint="https://sellingpartnerapi-na.amazon.com", marketplace_id="ATVPDKIKX0DER"):
+        self.access_token = None
+        self.endpoint = endpoint
+        self.marketplace_id = marketplace_id
+
+    def _autorize(self):
+
+        with open("saved token.pkl", "rb") as file:
+            loaded_data = pickle.load(file)
+
+        saved_token = {'access_token': loaded_data['access_token'], 'time': loaded_data['time']}
+
+        time_difference = (datetime.datetime.now() - saved_token['time']).seconds
+        if time_difference > 3500:
+            token_response = requests.post(
+                "https://api.amazon.com/auth/o2/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": credentials["refresh_token"],
+                    "client_id": credentials["lwa_app_id"],
+                    "client_secret": credentials["lwa_client_secret"],
+                },
+                proxies=proxy
+            )
+            access_token = token_response.json()["access_token"]
+
+            saved_token = {'access_token': access_token, 'time': datetime.datetime.now()}
+
+            with open("saved token.pkl", "wb") as file:
+                pickle.dump(saved_token, file)
+
+        self.access_token = saved_token['access_token']
+
+    def get_reports(self, next_token=None, report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT'):
+        """
+            Loading fba inventory data for marketplase.
+
+            Args:
+                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 report_type (str: report type according to az types
+            Returns:
+                df (dataframe): result frame of requested data
+        """
+
+        self._autorize()
+
+        if next_token is None:
+            request_params = {
+                "reportTypes": report_type,
+                "pageSize": 100
+            }
+        else:
+            request_params = {
+                "nextToken": next_token
+            }
+
+        #     api request
+        reports = requests.get(
+            self.endpoint + "/reports/2021-06-30/reports" + "?" + urllib.parse.urlencode(request_params),
+            headers={"x-amz-access-token": self.access_token},
+            proxies=proxy).json()
+
+        df = pd.DataFrame(reports['reports'])
+        pd.set_option('display.max_columns', None)
+        print(df)
+        df.to_excel('reports.xlsx')
+
+    def get_report(self, report_id=''):
+        """
+            Loading fba inventory data for marketplase.
+
+            Args:
+                 report_id (str): extermal id of report
+            Returns:
+                reportDocumentId (str): id of report main document to download
+        """
+
+        self._autorize()
+
+        #     api request
+        report = requests.get(
+            self.endpoint + "/reports/2021-06-30/reports" + "/" + report_id,
+            headers={"x-amz-access-token": self.access_token},
+            proxies=proxy).json()
+
+        print(report)
+        with open('report.txt', 'w') as file:
+            file.write(str(report))
+        return report['reportDocumentId']
+
+    def create_reports(self, start_date='01.09.2023', end_date='30.09.2023',
+                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions=None):
+        """
+            Loading fba inventory data for marketplase.
+
+            Args:
+                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+            Returns:
+                df (dataframe): result frame of requested data
+                :param opinions:
+        """
+
+        self._autorize()
+
+        start_date = datetime.datetime.strptime(start_date, "%d.%m.%Y").strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        end_date = datetime.datetime.strptime(end_date, "%d.%m.%Y").strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        if start_date == end_date:
+            period = "DAY"
+        else:
+            period = "MONTH"
+        opinions["reportPeriod"]=period
+        request_params = {
+            "reportOptions": opinions,
+            "reportType": report_type,
+            "dataStartTime": start_date,
+            "dataEndTime": end_date,
+            "marketplaceIds": [self.marketplace_id]
+        }
+        json_data = json.dumps(request_params)
+
+        #     api request
+        reports = requests.post(
+            self.endpoint + "/reports/2021-06-30/reports", json=json_data,
+            headers={"x-amz-access-token": self.access_token, 'Content-Type': 'application/json', 'charset': 'utf-8'},
+            proxies=proxy).json()
+
+        print((reports))
+
+    def get_report_document(self,
+                            report_doc_link='amzn1.spdoc.1.4.na.481c64ee-f907-4f5a-a6ca-c1e14730a78a.T3WGTOODYY4ZH.47700',
+                            internal_call=True):
+        """
+            Loading fba inventory data for marketplase.
+
+            Args:
+                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+            Returns:
+                df (dataframe): result frame of requested data
+        """
+
+        self._autorize()
+
+        #     api request
+        doc = requests.get(
+            self.endpoint + "/reports/2021-06-30/documents/" + report_doc_link,
+            headers={"x-amz-access-token": self.access_token},
+            proxies=proxy).json()
+
+        print(doc)
+        response = requests.get(doc['url'], stream=True, proxies=proxy)
+        if 'compressionAlgorithm' in doc and doc['compressionAlgorithm'] == "GZIP":
+            content = gzip.GzipFile(fileobj=io.BytesIO(response.content)).read()
+        else:
+            content = response.content
+        charset = response.encoding
+        content = content.decode(charset)
+        with open('temp.txt', 'w', encoding='utf-8') as file:
+            file.write(content)
+
+        if internal_call:
+            return content
+
+    def transform_sales_and_traf(self, content=None):
+        data1 = content["salesAndTrafficByDate"]
+        data2 = content["salesAndTrafficByAsin"]
+
+        df1 = pd.DataFrame([data1[0]['salesByDate']])
+
+        # Извлекаем значения "amount" из колонок, содержащих внутренний словарь
+        df1 = df1.map(lambda x: x.get('amount') if isinstance(x, dict) else x)
+
+        df_temp = pd.json_normalize(data1[0]['trafficByDate'])
+        df1 = pd.concat([df1, df_temp], axis=1)
+
+        df1.index = [data1[0]['date']]
+
+        df2 = pd.DataFrame(data2)
+        df2 = unfold_json(df=df2, col_name='trafficByAsin', ad_pref=False)
+        df2 = unfold_json(df=df2, col_name='salesByAsin', ad_pref=False)
+        df2.to_excel('bisness_report_api 24_10.xlsx')
+        df1.to_excel('ac_report_api 24_10.xlsx')
+
+    def transform_report_document(self, content=''):
+
+        with open("temp.txt", "r") as file:
+            # Читаем все содержимое файла
+            content = file.read()
+        data = json.loads(content)
+        if data['reportSpecification']['reportType'] == "GET_SALES_AND_TRAFFIC_REPORT":
+            self.transform_sales_and_traf(content=data)
+        # if response.headers['content-type'].startswith('text/plain'):
+        #     content = content.decode(charset)
+        #     with open('temp.txt', 'w', encoding='utf-8') as file:
+        #         file.write(content)
+        #     if '\n' in content:
+        #         lines = content.split('\n')
+        #         headers = lines[0].split('\t')
+        #         data = [line.split('\t') for line in lines[1:]]
+        #         df = pd.DataFrame(data, columns=headers)
+        #         df.to_excel(file + '.xlsx', index=False)
+        #     else:
+        #         with open(file + '.txt', 'w') as file:
+        #             file.write(content)
+
+
+test = Report_loader()
+report_type = 'GET_SALES_AND_TRAFFIC_REPORT'
+# test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',opinions={"asinGranularity":"SKU"})
+# test.get_reports(report_type=report_type)
+# test.get_report('87032019660')
+# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.4ca6aeda-40a9-4d73-beb3-6ade71aa6ca4.TX7A6WLS2BMO0.44900')
+test.transform_report_document()
