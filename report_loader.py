@@ -26,14 +26,15 @@ def unfold_json(df, col_name, ad_pref=True):
 class Report_loader:
     """Base class for api requests to SPA"""
 
-    def __init__(self, endpoint="https://sellingpartnerapi-na.amazon.com", marketplace_id="ATVPDKIKX0DER"):
+    def __init__(self, endpoint="https://sellingpartnerapi-na.amazon.com", marketplace_id="ATVPDKIKX0DER",temp_token='saved token.pkl'):
         self.access_token = None
         self.endpoint = endpoint
         self.marketplace_id = marketplace_id
+        self.temp_token=temp_token
 
     def _autorize(self):
 
-        with open("saved token.pkl", "rb") as file:
+        with open(self.temp_token, "rb") as file:
             loaded_data = pickle.load(file)
 
         saved_token = {'access_token': loaded_data['access_token'], 'time': loaded_data['time']}
@@ -75,7 +76,8 @@ class Report_loader:
         if next_token is None:
             request_params = {
                 "reportTypes": report_type,
-                "pageSize": 100
+                "pageSize": 100,
+
             }
         else:
             request_params = {
@@ -92,6 +94,7 @@ class Report_loader:
         pd.set_option('display.max_columns', None)
         print(df)
         df.to_excel('reports.xlsx')
+        return df
 
     def get_report(self, report_id=''):
         """
@@ -114,10 +117,15 @@ class Report_loader:
         print(report)
         with open('report.txt', 'w') as file:
             file.write(str(report))
-        return report['reportDocumentId']
+        if report['processingStatus']=='DONE':
+            return report['reportDocumentId']
+        elif report['processingStatus']=='FATAL' or report['processingStatus']=='CANCELLED':
+            raise ValueError("Report progress value malfunction")
+        else:
+            return None
 
     def create_reports(self, start_date='01.09.2023', end_date='30.09.2023',
-                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions=None):
+                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions={}):
         """
             Loading fba inventory data for marketplase.
 
@@ -154,6 +162,7 @@ class Report_loader:
             proxies=proxy).json()
 
         print((reports))
+        return reports
 
     def get_report_document(self,
                             report_doc_link='amzn1.spdoc.1.4.na.481c64ee-f907-4f5a-a6ca-c1e14730a78a.T3WGTOODYY4ZH.47700',
@@ -190,11 +199,13 @@ class Report_loader:
         if internal_call:
             return content
 
-    def transform_sales_and_traf(self, content=None):
+    def _transform_sales_and_traf(self, content=None):
         data1 = content["salesAndTrafficByDate"]
         data2 = content["salesAndTrafficByAsin"]
 
+
         df1 = pd.DataFrame([data1[0]['salesByDate']])
+
 
         # Извлекаем значения "amount" из колонок, содержащих внутренний словарь
         df1 = df1.map(lambda x: x.get('amount') if isinstance(x, dict) else x)
@@ -202,22 +213,33 @@ class Report_loader:
         df_temp = pd.json_normalize(data1[0]['trafficByDate'])
         df1 = pd.concat([df1, df_temp], axis=1)
 
-        df1.index = [data1[0]['date']]
+        df1['date']= [data1[0]['date']]
+        df1['Currensu']=data1[0]['salesByDate']['orderedProductSales']['currencyCode']
 
         df2 = pd.DataFrame(data2)
-        df2 = unfold_json(df=df2, col_name='trafficByAsin', ad_pref=False)
-        df2 = unfold_json(df=df2, col_name='salesByAsin', ad_pref=False)
-        df2.to_excel('bisness_report_api 24_10.xlsx')
-        df1.to_excel('ac_report_api 24_10.xlsx')
+        if 'trafficByAsin' in df2.columns and 'salesByAsin' in df2.columns:
+            df2 = unfold_json(df=df2, col_name='trafficByAsin', ad_pref=False)
+            df2 = df2.drop('trafficByAsin', axis=1)
 
-    def transform_report_document(self, content=''):
+            df2 = unfold_json(df=df2, col_name='salesByAsin', ad_pref=False)
+            df2 = df2.drop('salesByAsin', axis=1)
+            df2['date']=data1[0]['date']
+        else:
+            df2=pd.DataFrame()
+        # df2.to_excel('bisness_report_api 24_10.xlsx')
+        # df1.to_excel('ac_report_api 24_10.xlsx')
+        return [df1,df2]
 
-        with open("temp.txt", "r") as file:
-            # Читаем все содержимое файла
-            content = file.read()
+    def transform_report_document(self, content=None):
+
+        if not content:
+            with open("temp.txt", "r") as file:
+                # Читаем все содержимое файла
+                content = file.read()
+
         data = json.loads(content)
         if data['reportSpecification']['reportType'] == "GET_SALES_AND_TRAFFIC_REPORT":
-            self.transform_sales_and_traf(content=data)
+            return self._transform_sales_and_traf(content=data)
         # if response.headers['content-type'].startswith('text/plain'):
         #     content = content.decode(charset)
         #     with open('temp.txt', 'w', encoding='utf-8') as file:
@@ -234,9 +256,10 @@ class Report_loader:
 
 
 test = Report_loader()
-report_type = 'GET_SALES_AND_TRAFFIC_REPORT'
+report_type = 'GET_REFERRAL_FEE_PREVIEW_REPORT'
 # test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',opinions={"asinGranularity":"SKU"})
+# test.create_reports(report_type=report_type,start_date='31.10.2023',end_date='31.10.2023')
 # test.get_reports(report_type=report_type)
-# test.get_report('87032019660')
-# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.4ca6aeda-40a9-4d73-beb3-6ade71aa6ca4.TX7A6WLS2BMO0.44900')
-test.transform_report_document()
+# test.get_report('87034019660')
+# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.486768ee-e5bb-41a3-ac4d-2a483afe4c05.TRRWIKG3HN0YS.315')
+# test.transform_report_document()
