@@ -139,6 +139,7 @@ class SPA_requests:
             }
 
         shipments = pd.DataFrame()
+        shipments_settle = pd.DataFrame()
         refunds = pd.DataFrame()
         garantee_claim = pd.DataFrame()
         chargeback = pd.DataFrame()
@@ -153,6 +154,8 @@ class SPA_requests:
             json.dump(events, file, ensure_ascii=False)
         if 'ShipmentEventList' in events:
             shipments = pd.DataFrame(events['ShipmentEventList'])
+        if 'ShipmentSettleEventList' in events:
+            shipments_settle = pd.DataFrame(events['ShipmentSettleEventList'])
         if 'RefundEventList' in events:
             refunds = pd.DataFrame(events['RefundEventList'])
         if 'GuaranteeClaimEventList' in events:
@@ -166,6 +169,8 @@ class SPA_requests:
                                               end_date=end_date, initial_call=False)
             if 'ShipmentEventList' in events:
                 shipments = pd.concat([shipments, temp_events['ShipmentEventList']])
+            if 'ShipmentSettleEventList' in events:
+                shipments_settle = pd.concat([shipments_settle, temp_events['ShipmentEventList']])
             if 'RefundEventList' in events:
                 refunds = pd.concat([refunds, temp_events['RefundEventList']])
             if 'GuaranteeClaimEventList' in events:
@@ -174,16 +179,19 @@ class SPA_requests:
                 chargeback = pd.concat([chargeback, temp_events['ChargebackEventList']])
 
         if initial_call:
-            with pd.ExcelWriter('output.xlsx', engine='openpyxl') as writer:
-                # Сохраняем каждый DataFrame на отдельном листе
-                shipments.to_excel(writer, sheet_name='Shipments', index=False)
-                refunds.to_excel(writer, sheet_name='Refunds', index=False)
-                garantee_claim.to_excel(writer, sheet_name='Garantee_claim', index=False)
-                chargeback.to_excel(writer, sheet_name='Chargeback', index=False)
+
+            # Сохраняем каждый DataFrame на отдельном листе
+            shipments.to_excel('Shipments.xlsx', index=False)
+            shipments_settle.to_excel('Shipments_settle.xlsx', index=False)
+            refunds.to_excel('Refunds.xlsx', index=False)
+            garantee_claim.to_excel('Garantee_claim.xlsx', index=False)
+            chargeback.to_excel('Chargeback.xlsx', index=False)
         else:
             temp_dict = {}
             if 'ShipmentEventList' in events:
                 temp_dict['ShipmentEventList'] = shipments
+            if 'ShipmentSettleEventList' in events:
+                temp_dict['ShipmentSettleEventList'] = shipments_settle
             if 'RefundEventList' in events:
                 temp_dict['RefundEventList'] = refunds
             if 'GuaranteeClaimEventList' in events:
@@ -228,7 +236,7 @@ class SPA_requests:
         else:
             return df
 
-    def get_reports(self, next_token=None, report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', initial_call=True):
+    def get_reports_schedules(self, next_token=None, report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', initial_call=True):
         """
             Loading fba inventory data for marketplase.
 
@@ -241,26 +249,21 @@ class SPA_requests:
 
         self._autorize()
 
-        if next_token is None:
-            request_params = {
-                "reportTypes": report_type,
-                "pageSize": 100
-            }
-        else:
-            request_params = {
-                "nextToken": next_token
-            }
+
+        request_params = {
+            "reportTypes": report_type,
+        }
 
         #     api request
         reports = requests.get(
-            self.endpoint + "/reports/2021-06-30/reports" + "?" + urllib.parse.urlencode(request_params),
+            self.endpoint + "/reports/2021-06-30/schedules" + "?" + urllib.parse.urlencode(request_params),
             headers={"x-amz-access-token": self.access_token},
             proxies=proxy).json()
 
         df = pd.DataFrame(reports['reports'])
         pd.set_option('display.max_columns', None)
         print(df)
-        df.to_excel('reports.xlsx')
+        df.to_excel('reports_schedules.xlsx')
 
     def get_report(self, report_id=''):
         """
@@ -418,11 +421,12 @@ class SPA_requests:
 
 
 test = SPA_requests()
-# test.finance_events()
+test.finance_events()
 # test.fba_inventory()
 # test.sales_metrics()
-report_type='GET_BRAND_ANALYTICS_REPEAT_PURCHASE_REPORT'
+report_type='GET_SALES_AND_TRAFFIC_REPORT'
 # test.create_reports(report_type=report_type)
 # test.get_reports(report_type=report_type)
 # test.get_report('86943019660')
-test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.5cb8ae01-5ab7-412d-a704-fd3b6fad074a.T3JS88H1U1CUOK.2900', file='BRAND_ANALYTICS', json_marker='salesAndTrafficByDate')
+# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.5cb8ae01-5ab7-412d-a704-fd3b6fad074a.T3JS88H1U1CUOK.2900', file='BRAND_ANALYTICS', json_marker='salesAndTrafficByDate')
+# test.get_reports_schedules(report_type=report_type)

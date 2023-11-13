@@ -17,7 +17,7 @@ def load_sales_and_traf(id='',file=False,timedelta=1):
                                                  end_date=date, opinions={"asinGranularity": "SKU"})['reportId']
         else:
             rep_id = id
-        time.sleep(10)
+        time.sleep(20)
         doc_id = salesandtraf.get_report(rep_id)
         while not doc_id:
             time.sleep(20)
@@ -33,4 +33,5 @@ def load_sales_and_traf(id='',file=False,timedelta=1):
 
 
 
-load_sales_and_traf(id='')
+load_sales_and_traf(id='',timedelta=1)
+

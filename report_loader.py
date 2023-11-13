@@ -3,6 +3,8 @@ import gzip
 import json
 import pickle
 import urllib.parse
+
+import chardet as chardet
 import pandas as pd
 import io
 import requests
@@ -125,7 +127,7 @@ class Report_loader:
             return None
 
     def create_reports(self, start_date='01.09.2023', end_date='30.09.2023',
-                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions={}):
+                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions=None,no_date=False):
         """
             Loading fba inventory data for marketplase.
 
@@ -137,6 +139,8 @@ class Report_loader:
                 :param opinions:
         """
 
+        if opinions is None:
+            opinions = {}
         self._autorize()
 
         start_date = datetime.datetime.strptime(start_date, "%d.%m.%Y").strftime('%Y-%m-%dT%H:%M:%S.%fZ')
@@ -146,13 +150,21 @@ class Report_loader:
         else:
             period = "MONTH"
         opinions["reportPeriod"]=period
-        request_params = {
-            "reportOptions": opinions,
-            "reportType": report_type,
-            "dataStartTime": start_date,
-            "dataEndTime": end_date,
-            "marketplaceIds": [self.marketplace_id]
-        }
+        if no_date:
+
+            request_params = {
+                "reportOptions": opinions,
+                "reportType": report_type,
+                "marketplaceIds": [self.marketplace_id]
+            }
+        else:
+            request_params = {
+                "reportOptions": opinions,
+                "reportType": report_type,
+                "dataStartTime": start_date,
+                "dataEndTime": end_date,
+                "marketplaceIds": [self.marketplace_id]
+            }
         json_data = json.dumps(request_params)
 
         #     api request
@@ -192,7 +204,12 @@ class Report_loader:
         else:
             content = response.content
         charset = response.encoding
-        content = content.decode(charset)
+        if charset is None:
+            with open('temp.txt', 'wb') as file:
+                file.write(content)
+                return
+        else:
+            content = content.decode(charset)
         with open('temp.txt', 'w', encoding='utf-8') as file:
             file.write(content)
 
@@ -256,10 +273,15 @@ class Report_loader:
 
 
 test = Report_loader()
-report_type = 'GET_REFERRAL_FEE_PREVIEW_REPORT'
+report_type = 'GET_GST_STR_ADHOC'
 # test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',opinions={"asinGranularity":"SKU"})
-# test.create_reports(report_type=report_type,start_date='31.10.2023',end_date='31.10.2023')
+# test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023')
+# test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023')
+# test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',no_date=True)
+# test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023',opinions={"depersonalized":"true"})
+# test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.11.2023', opinions={"campaignStartDateFrom": "2023-09-01T00:00:00Z", "campaignStartDateTo": "2023-11-01T00:00:00Z" })
 # test.get_reports(report_type=report_type)
-# test.get_report('87034019660')
-# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.486768ee-e5bb-41a3-ac4d-2a483afe4c05.TRRWIKG3HN0YS.315')
+# test.get_report('90979019671')
+# test.get_report('91025019671')
+# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.4c143c93-6432-4a46-b517-272af14efe25.T1P940KSGKCZDD.11202')
 # test.transform_report_document()
