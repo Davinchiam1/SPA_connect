@@ -2,6 +2,7 @@ from report_loader import Report_loader
 from pg_db_connector import update_report_table
 import datetime
 import time
+import json
 
 
 def load_sales_and_traf(id='',file=False,timedelta=1):

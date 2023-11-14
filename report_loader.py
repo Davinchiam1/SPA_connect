@@ -273,15 +273,15 @@ class Report_loader:
 
 
 test = Report_loader()
-report_type = 'GET_GST_STR_ADHOC'
-# test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',opinions={"asinGranularity":"SKU"})
+report_type = 'GET_SALES_AND_TRAFFIC_REPORT'
+# test.create_reports(report_type=report_type,start_date='12.10.2023',end_date='12.11.2023',opinions={"asinGranularity":"SKU"})
 # test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023')
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023')
 # test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',no_date=True)
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023',opinions={"depersonalized":"true"})
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.11.2023', opinions={"campaignStartDateFrom": "2023-09-01T00:00:00Z", "campaignStartDateTo": "2023-11-01T00:00:00Z" })
 # test.get_reports(report_type=report_type)
-# test.get_report('90979019671')
+# test.get_report('92637019675')
 # test.get_report('91025019671')
-# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.4c143c93-6432-4a46-b517-272af14efe25.T1P940KSGKCZDD.11202')
+test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.56aae379-2971-489c-abd9-09c9f13cd0b7.T3J8LXOSQEAZU8.44900')
 # test.transform_report_document()
