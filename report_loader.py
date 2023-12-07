@@ -64,11 +64,11 @@ class Report_loader:
 
     def get_reports(self, next_token=None, report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT'):
         """
-            Loading fba inventory data for marketplase.
+            Loading 100 resent reports of chosen report_type
 
             Args:
                  next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 report_type (str: report type according to az types
+                 report_type (str): report type according to az types
             Returns:
                 df (dataframe): result frame of requested data
         """
@@ -94,13 +94,13 @@ class Report_loader:
 
         df = pd.DataFrame(reports['reports'])
         pd.set_option('display.max_columns', None)
-        print(df)
+        # print(df)
         df.to_excel('reports.xlsx')
         return df
 
     def get_report(self, report_id=''):
         """
-            Loading fba inventory data for marketplase.
+            Get report from service by id.
 
             Args:
                  report_id (str): extermal id of report
@@ -129,27 +129,35 @@ class Report_loader:
     def create_reports(self, start_date='01.09.2023', end_date='30.09.2023',
                        report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', opinions=None,no_date=False):
         """
-            Loading fba inventory data for marketplase.
+           Sending request to create report with chosen parameters.
 
             Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+                 start_date (str): start data for creating report
+                 end_date (str): end data for creating report
+                 report_type (str): report type according to az types
+                 opinions (dict): dict with additional request parameters
+                 no_date (bool): marker to attach or not attach date values, default False
             Returns:
-                df (dataframe): result frame of requested data
-                :param opinions:
+                report (json): json data of report id
         """
 
         if opinions is None:
             opinions = {}
         self._autorize()
 
-        start_date = datetime.datetime.strptime(start_date, "%d.%m.%Y").strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        end_date = datetime.datetime.strptime(end_date, "%d.%m.%Y").strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        start_date = datetime.datetime.strptime(start_date, "%d.%m.%Y")
+        end_date = datetime.datetime.strptime(end_date, "%d.%m.%Y")
         if start_date == end_date:
             period = "DAY"
+        elif (start_date-end_date).days==-6:
+            period = "WEEK"
         else:
             period = "MONTH"
         opinions["reportPeriod"]=period
+
+        start_date = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        end_date = end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
         if no_date:
 
             request_params = {
@@ -180,11 +188,11 @@ class Report_loader:
                             report_doc_link='amzn1.spdoc.1.4.na.481c64ee-f907-4f5a-a6ca-c1e14730a78a.T3WGTOODYY4ZH.47700',
                             internal_call=True):
         """
-            Loading fba inventory data for marketplase.
+            Loading report document content.
 
             Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+                 report_doc_link (str): id of report document
+                 internal_call (bool): marker of internal call to concentrate data from recursion data flows
             Returns:
                 df (dataframe): result frame of requested data
         """
@@ -217,6 +225,17 @@ class Report_loader:
             return content
 
     def _transform_sales_and_traf(self, content=None):
+
+        """
+            Transforming content of report GET_SALES_AND_TRAFFIC_REPORT type to dataframe form.
+
+            Args:
+                 content (json): content of report document
+
+            Returns:
+                df1 (dataframe): result frame of salesAndTrafficByDate
+                df2 (dataframe): result frame of salesAndTrafficByAsin
+        """
         data1 = content["salesAndTrafficByDate"]
         data2 = content["salesAndTrafficByAsin"]
 
@@ -248,7 +267,16 @@ class Report_loader:
         return [df1,df2]
 
     def transform_report_document(self, content=None):
+        """
+            Transforming content of reports by exact type from report content.
 
+            Args:
+                 content (json): content of report document
+
+            Returns:
+                df (dataframe): result frame transforming
+
+        """
         if not content:
             with open("temp.txt", "r") as file:
                 # Читаем все содержимое файла
@@ -273,15 +301,15 @@ class Report_loader:
 
 
 test = Report_loader()
-report_type = 'GET_SALES_AND_TRAFFIC_REPORT'
+# report_type = 'GET_BRAND_ANALYTICS_MARKET_BASKET_REPORT'
 # test.create_reports(report_type=report_type,start_date='12.10.2023',end_date='12.11.2023',opinions={"asinGranularity":"SKU"})
-# test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023')
+# test.create_reports(report_type=report_type,start_date='05.11.2023',end_date='11.11.2023')
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023')
 # test.create_reports(report_type=report_type,start_date='24.10.2023',end_date='24.10.2023',no_date=True)
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.10.2023',opinions={"depersonalized":"true"})
 # test.create_reports(report_type=report_type,start_date='01.09.2023', end_date='01.11.2023', opinions={"campaignStartDateFrom": "2023-09-01T00:00:00Z", "campaignStartDateTo": "2023-11-01T00:00:00Z" })
 # test.get_reports(report_type=report_type)
-# test.get_report('92637019675')
-# test.get_report('91025019671')
-test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.56aae379-2971-489c-abd9-09c9f13cd0b7.T3J8LXOSQEAZU8.44900')
+# test.get_report('92958019676')
+# test.get_report('92973019676')
+# test.get_report_document(report_doc_link='amzn1.spdoc.1.4.na.e3c15c83-fa1d-4b5b-ab88-2a088b2f333e.T2RPBF9FU592VI.88700')
 # test.transform_report_document()

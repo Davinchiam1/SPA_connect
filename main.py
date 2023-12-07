@@ -9,6 +9,7 @@ import requests
 from pandas import json_normalize
 
 from credentials import credentials, proxy
+from report_loader import unfold_json
 
 
 class SPA_requests:
@@ -51,18 +52,44 @@ class SPA_requests:
         """in progress"""
         if initial_call:
             self._autorize()
+            i=0
 
-        request_params = {
-            "MarketplaceIds": self.marketplace_id,  # required parameter
-            "CreatedAfter": (
-                    datetime.datetime.now() - datetime.timedelta(days=last_days)
-            ).isoformat(),  # orders created since 30 days ago, the date needs to be in the ISO format
-        }
+        if next_token is None:
+            request_params = {
+                "MarketplaceIds": self.marketplace_id,  # required parameter
+                "CreatedAfter": (
+                        datetime.datetime.now() - datetime.timedelta(days=last_days)
+                ).isoformat(),  # orders created since 30 days ago, the date needs to be in the ISO format
+            }
+        else:
+            request_params = {
+                "MarketplaceIds": self.marketplace_id,  # required parameter
+                "CreatedAfter": (
+                        datetime.datetime.now() - datetime.timedelta(days=last_days)
+                ).isoformat(),  # orders created since 30 days ago, the date needs to be in the ISO format
+                "NextToken": next_token
+            }
+
 
         orders = requests.get(
             self.endpoint + "/orders/v0/orders" + "?" + urllib.parse.urlencode(request_params),
             headers={"x-amz-access-token": self.access_token},
             proxies=proxy)
+
+        print('Progress')
+        orders_df=pd.DataFrame(orders.json()['payload']['Orders'])
+
+        # recursion part
+        if 'NextToken' in orders.json()['payload']:
+            temp_df = self.last_orders_request(next_token=orders.json()['payload']['NextToken'], initial_call=False)
+            orders_df = pd.concat([orders_df, temp_df], ignore_index=True)
+
+        if initial_call:
+            orders_df = unfold_json(df=orders_df, col_name='OrderTotal', ad_pref=False)
+            orders_df.to_excel('orders_test.xlsx')
+        else:
+            return orders_df
+
 
     def fba_inventory(self, next_token=None, initial_call=True):
         """
@@ -236,144 +263,9 @@ class SPA_requests:
         else:
             return df
 
-    def get_reports_schedules(self, next_token=None, report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT', initial_call=True):
-        """
-            Loading fba inventory data for marketplase.
-
-            Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
-            Returns:
-                df (dataframe): result frame of requested data
-        """
-
-        self._autorize()
 
 
-        request_params = {
-            "reportTypes": report_type,
-        }
-
-        #     api request
-        reports = requests.get(
-            self.endpoint + "/reports/2021-06-30/schedules" + "?" + urllib.parse.urlencode(request_params),
-            headers={"x-amz-access-token": self.access_token},
-            proxies=proxy).json()
-
-        df = pd.DataFrame(reports['reports'])
-        pd.set_option('display.max_columns', None)
-        print(df)
-        df.to_excel('reports_schedules.xlsx')
-
-    def get_report(self, report_id=''):
-        """
-            Loading fba inventory data for marketplase.
-
-            Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
-            Returns:
-                df (dataframe): result frame of requested data
-        """
-
-        self._autorize()
-
-
-
-        #     api request
-        report = requests.get(
-            self.endpoint + "/reports/2021-06-30/reports" + "/" + report_id,
-            headers={"x-amz-access-token": self.access_token},
-            proxies=proxy).json()
-
-        print(report)
-        with open('report.txt', 'w') as file:
-            file.write(str(report))
-
-    def create_reports(self, start_date=datetime.datetime(2023, 9, 1), end_date=datetime.datetime(2023, 9, 30),
-                       report_type='GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT'):
-        """
-            Loading fba inventory data for marketplase.
-
-            Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
-            Returns:
-                df (dataframe): result frame of requested data
-        """
-
-        self._autorize()
-
-        request_params = {
-            "reportOptions": {"reportPeriod": "MONTH"},
-            "reportType": report_type,
-            "dataStartTime": "2023-09-01T00:00:00.000Z",
-            "dataEndTime": "2023-09-30T00:00:00.000Z",
-            "marketplaceIds": [self.marketplace_id]
-        }
-        json_data = json.dumps(request_params)
-
-        #     api request
-        reports = requests.post(
-            self.endpoint + "/reports/2021-06-30/reports", json=json_data,
-            headers={"x-amz-access-token": self.access_token, 'Content-Type': 'application/json', 'charset': 'utf-8'},
-            proxies=proxy).json()
-
-        print((reports))
-
-    def get_report_document(self, json_marker='', file='test',
-                            report_doc_link='amzn1.spdoc.1.4.na.481c64ee-f907-4f5a-a6ca-c1e14730a78a.T3WGTOODYY4ZH.47700', ):
-        """
-            Loading fba inventory data for marketplase.
-
-            Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
-                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
-            Returns:
-                df (dataframe): result frame of requested data
-        """
-
-        self._autorize()
-
-        #     api request
-        doc = requests.get(
-            self.endpoint + "/reports/2021-06-30/documents/" + report_doc_link,
-            headers={"x-amz-access-token": self.access_token},
-            proxies=proxy).json()
-
-        print(doc)
-        response = requests.get(doc['url'], stream=True, proxies=proxy)
-        if 'compressionAlgorithm' in doc and doc['compressionAlgorithm'] == "GZIP":
-            content = gzip.GzipFile(fileobj=io.BytesIO(response.content)).read()
-        else:
-            content = response.content
-        charset = response.encoding
-        content1 = content.decode(charset)
-        with open('temp.txt', 'w',encoding='utf-8') as file:
-            file.write(content1)
-        if response.headers['content-type'].startswith('text/plain'):
-            content = content.decode(charset)
-            with open('temp.txt', 'w',encoding='utf-8') as file:
-                file.write(content)
-            if '\n' in content:
-                lines = content.split('\n')
-                headers = lines[0].split('\t')
-                data = [line.split('\t') for line in lines[1:]]
-                df = pd.DataFrame(data, columns=headers)
-                df.to_excel(file + '.xlsx', index=False)
-            else:
-                with open(file + '.txt', 'w') as file:
-                    file.write(content)
-
-            # Сохраняем датафрейм в эксель-файл
-
-
-        else:
-            # Handle content with binary data/other media types here.
-            with open('output_test.txt', 'wb') as file:
-                file.write(content)
-
-    def sales_metrics(self, start_date=datetime.datetime(2023, 9, 1), end_date=datetime.datetime(2023, 10, 1),
+    def sales_metrics(self, start_date=datetime.datetime(2023, 10, 1), end_date=datetime.datetime(2023, 11, 1),
                       initial_call=True):
         """
             Loading fba inventory data for marketplase.
@@ -407,23 +299,21 @@ class SPA_requests:
             headers={"x-amz-access-token": self.access_token},
             proxies=proxy).json()
 
-        df = pd.DataFrame(sales['payload'][0])
+        df = pd.DataFrame(sales['payload'])
 
         if initial_call:
-            # unfolding of detailed information
-            # df['inventoryDetails'] = df['inventoryDetails'].astype(str).str.replace("'", "\"")
-            # df['inventoryDetails'] = df['inventoryDetails'].apply(lambda x: json.loads(x))
-            # df_temp = json_normalize(df['inventoryDetails'])
-            # df = pd.concat([df, df_temp], axis=1)
-            # df = df.drop('inventoryDetails', axis=1)
-            # # returning result
-            df.to_excel('fba_test.xlsx')
+            df=unfold_json(df=df, col_name='totalSales', ad_pref=True)
+            df.drop('totalSales',axis=1, inplace=True)
+            df = unfold_json(df=df, col_name='averageUnitPrice', ad_pref=True)
+            df.drop('averageUnitPrice', axis=1, inplace=True)
+            df.to_excel('sales_metric_test.xlsx')
 
 
 test = SPA_requests()
-test.finance_events()
+# test.finance_events()
 # test.fba_inventory()
-# test.sales_metrics()
+test.sales_metrics()
+# test.last_orders_request()
 report_type='GET_SALES_AND_TRAFFIC_REPORT'
 # test.create_reports(report_type=report_type)
 # test.get_reports(report_type=report_type)

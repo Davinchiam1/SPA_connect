@@ -103,17 +103,21 @@ def update_report_table(reports_names, df_list):
 
             # update or upload data in table
             for row in data1:
-                existing_row = session.query(Temp_table).filter_by(**row).first()
-                if not existing_row:
-                    try:
-                        table = Temp_table(**row)
-                        session.merge(table)
-                    except Exception as e:
-                        errors_list.append(row['id'])
-                        print(e)
-                        continue
+                if 'sku' in row.keys():
+                    existing_row = session.query(Temp_table).filter_by(date=row['date'],sku=row['sku']).first()
                 else:
+                    existing_row = session.query(Temp_table).filter_by(date=row['date']).first()
+                if existing_row:
+                    session.delete(existing_row)
+                    session.commit()
+                try:
+                    table = Temp_table(**row)
+                    session.merge(table)
+                except Exception as e:
+                    errors_list.append(row['id'])
+                    print(e)
                     continue
+
         session.commit()
         session.close()
 
