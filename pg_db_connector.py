@@ -121,14 +121,7 @@ def update_report_table(reports_names, df_list):
         session.commit()
         session.close()
 
-    # with engine.connect() as connection:
-    #     result = connection.execute(text('SELECT * FROM ' + table_name))
-    #     df_result = pd.DataFrame(result.fetchall(), columns=result.keys())
-    #     df_result.to_excel('1234.xlsx')
-    #     print(df_result.tail())
-    #
-    # # закрытие соединения
-    # engine.dispose()
+
 
 
 # update_report_table(reports_names=['test1', 'test2'], df_list=Report_loader().transform_report_document())

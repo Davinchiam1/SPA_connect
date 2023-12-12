@@ -21,7 +21,7 @@ class SPA_requests:
         self.marketplace_id = marketplace_id
 
     def _autorize(self):
-
+        """Base authorization request"""
         with open("saved token.pkl", "rb") as file:
             loaded_data = pickle.load(file)
 
@@ -49,10 +49,19 @@ class SPA_requests:
         self.access_token = saved_token['access_token']
 
     def last_orders_request(self, last_days=10, next_token=None, initial_call=True):
-        """in progress"""
+        """
+            Loading basic orders data for marketplase.
+
+            Args:
+                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+                 last_days (int): number of days before current to load data from
+            Returns:
+                df (dataframe): result frame of requested data
+        """
         if initial_call:
             self._autorize()
-            i=0
+
 
         if next_token is None:
             request_params = {
@@ -70,14 +79,13 @@ class SPA_requests:
                 "NextToken": next_token
             }
 
-
         orders = requests.get(
             self.endpoint + "/orders/v0/orders" + "?" + urllib.parse.urlencode(request_params),
             headers={"x-amz-access-token": self.access_token},
             proxies=proxy)
 
         print('Progress')
-        orders_df=pd.DataFrame(orders.json()['payload']['Orders'])
+        orders_df = pd.DataFrame(orders.json()['payload']['Orders'])
 
         # recursion part
         if 'NextToken' in orders.json()['payload']:
@@ -89,7 +97,6 @@ class SPA_requests:
             orders_df.to_excel('orders_test.xlsx')
         else:
             return orders_df
-
 
     def fba_inventory(self, next_token=None, initial_call=True):
         """
@@ -150,6 +157,19 @@ class SPA_requests:
     def finance_events(self, next_token=None, start_date=datetime.datetime(2023, 9, 1),
                        end_date=datetime.datetime(2023, 10, 1),
                        initial_call=True):
+        """
+            Loading finance events data for marketplase.
+            Now only ShipmentEventList and ShipmentSettleEventList are processing.
+
+            Args:
+                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 start_date (datetime.datetime): minimal date for event.
+                 end_date (datetime.datetime): maximum date for event.
+                 initial_call (bool): marker of initial call to concentrate data from recursion data flows
+            Returns:
+                df (dataframe): result frame of requested data
+        """
+
         if initial_call:
             self._autorize()
 
@@ -263,15 +283,14 @@ class SPA_requests:
         else:
             return df
 
-
-
     def sales_metrics(self, start_date=datetime.datetime(2023, 10, 1), end_date=datetime.datetime(2023, 11, 1),
                       initial_call=True):
         """
-            Loading fba inventory data for marketplase.
+            Loading sales metrics data for marketplase.
 
             Args:
-                 next_token (str): token for next request in recursion, if data divided into several parts, initial None
+                 start_date (datetime.datetime): minimal date for event.
+                 end_date (datetime.datetime): maximum date for event.
                  initial_call (bool): marker of initial call to concentrate data from recursion data flows
             Returns:
                 df (dataframe): result frame of requested data
@@ -302,19 +321,19 @@ class SPA_requests:
         df = pd.DataFrame(sales['payload'])
 
         if initial_call:
-            df=unfold_json(df=df, col_name='totalSales', ad_pref=True)
-            df.drop('totalSales',axis=1, inplace=True)
+            df = unfold_json(df=df, col_name='totalSales', ad_pref=True)
+            df.drop('totalSales', axis=1, inplace=True)
             df = unfold_json(df=df, col_name='averageUnitPrice', ad_pref=True)
             df.drop('averageUnitPrice', axis=1, inplace=True)
             df.to_excel('sales_metric_test.xlsx')
 
 
-test = SPA_requests()
+# test = SPA_requests()
 # test.finance_events()
 # test.fba_inventory()
-test.sales_metrics()
+# test.sales_metrics()
 # test.last_orders_request()
-report_type='GET_SALES_AND_TRAFFIC_REPORT'
+# report_type = 'GET_SALES_AND_TRAFFIC_REPORT'
 # test.create_reports(report_type=report_type)
 # test.get_reports(report_type=report_type)
 # test.get_report('86943019660')
